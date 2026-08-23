@@ -9,6 +9,12 @@ function Projects() {
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
 
+  // Toast notification
+  const [toast, setToast] = useState(null);
+
+  // Delete confirmation
+  const [deleteId, setDeleteId] = useState(null);
+
   const fetchTasks = () => {
     setLoading(true);
     setError(null);
@@ -35,10 +41,24 @@ function Projects() {
     fetchTasks();
   }, []);
 
+  // Show toast
+  const showToast = (message, type = "success") => {
+    setToast({
+      message,
+      type,
+    });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  };
+
+  // CREATE TASK
   const addTask = (e) => {
     e.preventDefault();
 
     if (!title.trim()) {
+      showToast("Please enter a task title", "error");
       return;
     }
 
@@ -56,17 +76,22 @@ function Projects() {
         if (!res.ok) {
           throw new Error("Failed to create task");
         }
+
         return res.json();
       })
       .then((newTask) => {
-        setTasks([...tasks, newTask]);
+        setTasks((prevTasks) => [...prevTasks, newTask]);
         setTitle("");
+
+        showToast("Task created successfully");
       })
       .catch((err) => {
         setError(err.message);
+        showToast("Failed to create task", "error");
       });
   };
 
+  // UPDATE TASK
   const updateTask = (task) => {
     const newTitle = prompt("Enter new task title:", task.title);
 
@@ -88,20 +113,25 @@ function Projects() {
         if (!res.ok) {
           throw new Error("Failed to update task");
         }
+
         return res.json();
       })
       .then((updatedTask) => {
-        setTasks(
-          tasks.map((item) =>
+        setTasks((prevTasks) =>
+          prevTasks.map((item) =>
             item._id === updatedTask._id ? updatedTask : item
           )
         );
+
+        showToast("Task updated successfully");
       })
       .catch((err) => {
         setError(err.message);
+        showToast("Failed to update task", "error");
       });
   };
 
+  // DELETE TASK
   const deleteTask = (id) => {
     fetch(`http://localhost:5000/tasks/${id}`, {
       method: "DELETE",
@@ -110,13 +140,22 @@ function Projects() {
         if (!res.ok) {
           throw new Error("Failed to delete task");
         }
+
         return res.json();
       })
       .then(() => {
-        setTasks(tasks.filter((task) => task._id !== id));
+        setTasks((prevTasks) =>
+          prevTasks.filter((task) => task._id !== id)
+        );
+
+        setDeleteId(null);
+
+        showToast("Task deleted successfully");
       })
       .catch((err) => {
         setError(err.message);
+        setDeleteId(null);
+        showToast("Failed to delete task", "error");
       });
   };
 
@@ -128,7 +167,13 @@ function Projects() {
     return (
       <div className="bento-card">
         <ErrorMessage message={error} />
-        <button onClick={fetchTasks} className="btn btn-primary">Retry</button>
+
+        <button
+          onClick={fetchTasks}
+          className="btn btn-primary"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -139,8 +184,17 @@ function Projects() {
 
   return (
     <div className="bento-card tasks-card">
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast ${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
+
       <h2 className="section-title">Tasks</h2>
 
+      {/* Add Task */}
       <form onSubmit={addTask} className="task-form">
         <input
           type="text"
@@ -149,11 +203,18 @@ function Projects() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <button type="submit" className="btn btn-primary">Add Task</button>
+
+        <button
+          type="submit"
+          className="btn btn-primary"
+        >
+          Add Task
+        </button>
       </form>
 
       <br />
 
+      {/* Search */}
       <input
         type="text"
         className="form-input search-box"
@@ -162,24 +223,93 @@ function Projects() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
+      {/* Task List */}
       <div className="tasks-list">
         {filteredTasks.map((task) => (
-          <div key={task._id} className="task-item-card">
+          <div
+            key={task._id}
+            className="task-item-card"
+          >
             <div className="task-header">
-              <h3 className="task-title">{task.title}</h3>
-              <span className={`status-chip ${task.completed ? "completed" : "pending"}`}>
-                Status: {task.completed ? "Completed" : "Pending"}
+
+              <h3 className="task-title">
+                {task.title}
+              </h3>
+
+              <span
+                className={`status-chip ${
+                  task.completed
+                    ? "completed"
+                    : "pending"
+                }`}
+              >
+                Status:{" "}
+                {task.completed
+                  ? "Completed"
+                  : "Pending"}
               </span>
+
             </div>
 
             <div className="task-actions">
-              <button onClick={() => updateTask(task)} className="btn btn-secondary">Update</button>
-              <button onClick={() => deleteTask(task._id)} className="btn btn-danger">Delete</button>
+
+              <button
+                onClick={() => updateTask(task)}
+                className="btn btn-secondary"
+              >
+                Update
+              </button>
+
+              <button
+                onClick={() => setDeleteId(task._id)}
+                className="btn btn-danger"
+              >
+                Delete
+              </button>
+
             </div>
+
             <hr className="task-divider" />
           </div>
         ))}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="modal-overlay">
+
+          <div className="confirmation-modal">
+
+            <h3>Delete Task?</h3>
+
+            <p>
+              Are you sure you want to delete this task?
+              This action cannot be undone.
+            </p>
+
+            <div className="modal-actions">
+
+              <button
+                onClick={() => setDeleteId(null)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => deleteTask(deleteId)}
+                className="btn btn-danger"
+              >
+                Delete
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }
