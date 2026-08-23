@@ -16,16 +16,18 @@ function App() {
     <div className={darkMode ? "dark" : "light"}>
       <Navbar />
 
-      <button onClick={() => setDarkMode(!darkMode)}>
+      <button className="theme-toggle-btn" onClick={() => setDarkMode(!darkMode)}>
         {darkMode ? "☀ Light Mode" : "🌙 Dark Mode"}
       </button>
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <main className="app-container">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
 
       <Footer />
     </div>

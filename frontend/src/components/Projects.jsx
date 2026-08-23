@@ -126,9 +126,9 @@ function Projects() {
 
   if (error) {
     return (
-      <div>
+      <div className="bento-card">
         <ErrorMessage message={error} />
-        <button onClick={fetchTasks}>Retry</button>
+        <button onClick={fetchTasks} className="btn btn-primary">Retry</button>
       </div>
     );
   }
@@ -138,42 +138,48 @@ function Projects() {
   );
 
   return (
-    <div>
-      <h2>Tasks</h2>
+    <div className="bento-card tasks-card">
+      <h2 className="section-title">Tasks</h2>
 
-      <form onSubmit={addTask}>
+      <form onSubmit={addTask} className="task-form">
         <input
           type="text"
+          className="form-input"
           placeholder="Enter task title..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <button type="submit">Add Task</button>
+        <button type="submit" className="btn btn-primary">Add Task</button>
       </form>
 
       <br />
 
       <input
         type="text"
-        className="search-box"
+        className="form-input search-box"
         placeholder="Search task..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {filteredTasks.map((task) => (
-        <div key={task._id}>
-          <h3>{task.title}</h3>
+      <div className="tasks-list">
+        {filteredTasks.map((task) => (
+          <div key={task._id} className="task-item-card">
+            <div className="task-header">
+              <h3 className="task-title">{task.title}</h3>
+              <span className={`status-chip ${task.completed ? "completed" : "pending"}`}>
+                Status: {task.completed ? "Completed" : "Pending"}
+              </span>
+            </div>
 
-          <p>Status: {task.completed ? "Completed" : "Pending"}</p>
-
-          <button onClick={() => updateTask(task)}>Update</button>
-
-          <button onClick={() => deleteTask(task._id)}>Delete</button>
-
-          <hr />
-        </div>
-      ))}
+            <div className="task-actions">
+              <button onClick={() => updateTask(task)} className="btn btn-secondary">Update</button>
+              <button onClick={() => deleteTask(task._id)} className="btn btn-danger">Delete</button>
+            </div>
+            <hr className="task-divider" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2,10 +2,12 @@ import { NavLink } from "react-router-dom";
 
 function Navbar() {
   return (
-    <nav>
-      <NavLink to="/" end>Home</NavLink> |{" "}
-      <NavLink to="/projects">Projects</NavLink> |{" "}
-      <NavLink to="/contact">Contact</NavLink>
+    <nav className="glass-navbar">
+      <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>Home</NavLink>
+      <span className="nav-separator">|</span>
+      <NavLink to="/projects" className={({ isActive }) => (isActive ? "active" : "")}>Projects</NavLink>
+      <span className="nav-separator">|</span>
+      <NavLink to="/contact" className={({ isActive }) => (isActive ? "active" : "")}>Contact</NavLink>
     </nav>
   );
 }

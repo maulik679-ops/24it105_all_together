@@ -3,9 +3,9 @@ import Skills from "./Skills";
 
 function Home() {
   return (
-    <div>
+    <div className="home-container">
       <section className="hero-section">
-        <h1>Maulik Vaghela</h1>
+        <h1 className="hero-title">Maulik Vaghela</h1>
         <p className="hero-subtitle">React Developer | IT Student</p>
       </section>
       <About />

@@ -1,8 +1,8 @@
 function ErrorMessage({ message }) {
   return (
-    <div>
-      <h2>Error!</h2>
-      <p>{message}</p>
+    <div className="error-card">
+      <h2 className="error-title">Error!</h2>
+      <p className="error-text">{message}</p>
     </div>
   );
 }
