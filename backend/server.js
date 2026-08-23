@@ -1,11 +1,17 @@
-const cors = require('cors');
-const express = require('express');
-const mongoose = require('mongoose');
-require('dotenv').config();
-const Task = require('./models/Task');
+const bcrypt = require("bcryptjs");
+const User = require("./models/User");
+const jwt = require("jsonwebtoken");
+const authMiddleware = require("./middleware/authMiddleware");
+const validateTask = require("./middleware/validateTask");
+const cors = require("cors");
+const express = require("express");
+const mongoose = require("mongoose");
+require("dotenv").config();
+const Task = require("./models/Task");
 
 const app = express();
 const PORT = 5000;
+
 app.use(cors());
 
 // Connect to MongoDB
@@ -22,14 +28,10 @@ app.use(express.json());
 
 // Content-Type validation middleware
 app.use((req, res, next) => {
-
-    // Only check POST and PUT requests
-    if (req.method === 'POST' || req.method === 'PUT') {
-
-        // Check if Content-Type is application/json
-        if (!req.is('application/json')) {
+    if (req.method === "POST" || req.method === "PUT") {
+        if (!req.is("application/json")) {
             return res.status(400).json({
-                error: 'Content-Type must be application/json'
+                error: "Content-Type must be application/json"
             });
         }
     }
@@ -43,30 +45,129 @@ app.use((req, res, next) => {
     next();
 });
 
-// Home Route
-app.get('/', (req, res) => {
-    res.send('Task Manager API is running...');
-});
-
-// GET all tasks
-app.get('/tasks', async (req, res, next) => {
+// Register
+app.post("/register", async (req, res) => {
     try {
+        const { email, password } = req.body;
 
-        const tasks = await Task.find();
+        if (!email || !password) {
+            return res.status(400).json({
+                message: "Email and password are required"
+            });
+        }
 
-        res.status(200).json(tasks);
+        const existingUser = await User.findOne({ email });
 
-    } catch (err) {
+        if (existingUser) {
+            return res.status(400).json({
+                message: "User already exists"
+            });
+        }
 
-        next(err);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
+        const user = await User.create({
+            email,
+            password: hashedPassword
+        });
+
+        res.status(201).json({
+            message: "User registered successfully",
+            user: {
+                id: user._id,
+                email: user.email
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Registration failed",
+            error: error.message
+        });
     }
 });
 
-// GET task by ID
-app.get('/tasks/:id', async (req, res, next) => {
+// Login
+app.post("/login", async (req, res) => {
     try {
+        const { email, password } = req.body;
 
+        if (!email || !password) {
+            return res.status(400).json({
+                message: "Email and password are required"
+            });
+        }
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(401).json({
+                message: "Invalid email or password"
+            });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(401).json({
+                message: "Invalid email or password"
+            });
+        }
+
+        const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        res.json({
+            message: "Login successful",
+            token
+        });
+    } catch (error) {
+        res.status(500).json({
+            message: "Login failed",
+            error: error.message
+        });
+    }
+});
+
+app.get("/me", authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select("-password");
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        res.status(200).json(user);
+    } catch (error) {
+        res.status(500).json({
+            message: "Failed to get user"
+        });
+    }
+});
+
+// Home Route
+app.get("/", (req, res) => {
+    res.send("Task Manager API is running...");
+});
+
+// GET all tasks - Protected
+app.get("/tasks", authMiddleware, async (req, res, next) => {
+    try {
+        const tasks = await Task.find();
+
+        res.status(200).json(tasks);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// GET task by ID - Protected
+app.get("/tasks/:id", authMiddleware, async (req, res, next) => {
+    try {
         const task = await Task.findById(req.params.id);
 
         if (!task) {
@@ -76,33 +177,25 @@ app.get('/tasks/:id', async (req, res, next) => {
         }
 
         res.status(200).json(task);
-
     } catch (err) {
-
         next(err);
-
     }
 });
 
-// POST a new task
-app.post('/tasks', async (req, res, next) => {
+// POST a new task - Protected
+app.post("/tasks", authMiddleware, validateTask, async (req, res, next) => {
     try {
-
         const task = await Task.create(req.body);
 
         res.status(201).json(task);
-
     } catch (err) {
-
         next(err);
-
     }
 });
 
-// PUT update a task
-app.put('/tasks/:id', async (req, res, next) => {
+// PUT update a task - Protected
+app.put("/tasks/:id", authMiddleware, validateTask, async (req, res, next) => {
     try {
-
         const task = await Task.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -116,18 +209,14 @@ app.put('/tasks/:id', async (req, res, next) => {
         }
 
         res.status(200).json(task);
-
     } catch (err) {
-
         next(err);
-
     }
 });
 
-// DELETE a task
-app.delete('/tasks/:id', async (req, res, next) => {
+// DELETE a task - Protected
+app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
     try {
-
         const task = await Task.findByIdAndDelete(req.params.id);
 
         if (!task) {
@@ -139,16 +228,13 @@ app.delete('/tasks/:id', async (req, res, next) => {
         res.status(200).json({
             message: "Task deleted successfully"
         });
-
     } catch (err) {
-
         next(err);
-
     }
 });
 
 // Test Error Route
-app.get('/error', (req, res, next) => {
+app.get("/error", (req, res, next) => {
     next(new Error("Test error"));
 });
 

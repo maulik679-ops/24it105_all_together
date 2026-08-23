@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Spinner from "./Spinner";
 import ErrorMessage from "./ErrorMessage";
 
@@ -9,21 +10,39 @@ function Projects() {
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
 
-  // Toast notification
   const [toast, setToast] = useState(null);
-
-  // Delete confirmation
   const [deleteId, setDeleteId] = useState(null);
+
+  const navigate = useNavigate();
+
+  const getToken = () => {
+    return localStorage.getItem("token");
+  };
+
+  const handleUnauthorized = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
   const fetchTasks = () => {
     setLoading(true);
     setError(null);
 
-    fetch("http://localhost:5000/tasks")
+    fetch("http://localhost:5000/tasks", {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    })
       .then((res) => {
+        if (res.status === 401) {
+          handleUnauthorized();
+          throw new Error("Session expired. Please login again.");
+        }
+
         if (!res.ok) {
           throw new Error("Failed to fetch tasks");
         }
+
         return res.json();
       })
       .then((data) => {
@@ -41,7 +60,6 @@ function Projects() {
     fetchTasks();
   }, []);
 
-  // Show toast
   const showToast = (message, type = "success") => {
     setToast({
       message,
@@ -66,6 +84,7 @@ function Projects() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify({
         title: title,
@@ -73,6 +92,11 @@ function Projects() {
       }),
     })
       .then((res) => {
+        if (res.status === 401) {
+          handleUnauthorized();
+          throw new Error("Session expired. Please login again.");
+        }
+
         if (!res.ok) {
           throw new Error("Failed to create task");
         }
@@ -103,6 +127,7 @@ function Projects() {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
       },
       body: JSON.stringify({
         title: newTitle,
@@ -110,6 +135,11 @@ function Projects() {
       }),
     })
       .then((res) => {
+        if (res.status === 401) {
+          handleUnauthorized();
+          throw new Error("Session expired. Please login again.");
+        }
+
         if (!res.ok) {
           throw new Error("Failed to update task");
         }
@@ -135,8 +165,16 @@ function Projects() {
   const deleteTask = (id) => {
     fetch(`http://localhost:5000/tasks/${id}`, {
       method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
     })
       .then((res) => {
+        if (res.status === 401) {
+          handleUnauthorized();
+          throw new Error("Session expired. Please login again.");
+        }
+
         if (!res.ok) {
           throw new Error("Failed to delete task");
         }
@@ -185,7 +223,6 @@ function Projects() {
   return (
     <div className="bento-card tasks-card">
 
-      {/* Toast Notification */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.message}
@@ -194,7 +231,6 @@ function Projects() {
 
       <h2 className="section-title">Tasks</h2>
 
-      {/* Add Task */}
       <form onSubmit={addTask} className="task-form">
         <input
           type="text"
@@ -214,7 +250,6 @@ function Projects() {
 
       <br />
 
-      {/* Search */}
       <input
         type="text"
         className="form-input search-box"
@@ -223,7 +258,6 @@ function Projects() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {/* Task List */}
       <div className="tasks-list">
         {filteredTasks.map((task) => (
           <div
@@ -274,7 +308,6 @@ function Projects() {
         ))}
       </div>
 
-      {/* Delete Confirmation Modal */}
       {deleteId && (
         <div className="modal-overlay">
 
