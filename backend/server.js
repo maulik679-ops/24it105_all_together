@@ -7,10 +7,16 @@ const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
 require("dotenv").config();
+
 const Task = require("./models/Task");
+const cache = require("./cache");
 
 const app = express();
 const PORT = 5000;
+
+// Cache statistics
+let cacheHits = 0;
+let cacheMisses = 0;
 
 app.use(cors());
 
@@ -45,7 +51,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Register
+// ==================== REGISTER ====================
+
 app.post("/register", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -86,7 +93,8 @@ app.post("/register", async (req, res) => {
     }
 });
 
-// Login
+// ==================== LOGIN ====================
+
 app.post("/login", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -131,6 +139,8 @@ app.post("/login", async (req, res) => {
     }
 });
 
+// ==================== GET CURRENT USER ====================
+
 app.get("/me", authMiddleware, async (req, res) => {
     try {
         const user = await User.findById(req.user.id).select("-password");
@@ -149,15 +159,36 @@ app.get("/me", authMiddleware, async (req, res) => {
     }
 });
 
-// Home Route
+// ==================== HOME ROUTE ====================
+
 app.get("/", (req, res) => {
     res.send("Task Manager API is running...");
 });
 
-// GET all tasks - Protected
+// ==================== GET ALL TASKS - CACHED ====================
+
 app.get("/tasks", authMiddleware, async (req, res, next) => {
     try {
+        const cachedTasks = cache.get("all_tasks");
+
+        // Cache HIT
+        if (cachedTasks) {
+            cacheHits++;
+
+            console.log("Cache HIT: all_tasks");
+
+            return res.status(200).json(cachedTasks);
+        }
+
+        // Cache MISS
+        cacheMisses++;
+
+        console.log("Cache MISS: all_tasks");
+
         const tasks = await Task.find();
+
+        // Store tasks in cache
+        cache.set("all_tasks", tasks);
 
         res.status(200).json(tasks);
     } catch (err) {
@@ -165,9 +196,28 @@ app.get("/tasks", authMiddleware, async (req, res, next) => {
     }
 });
 
-// GET task by ID - Protected
+// ==================== GET TASK BY ID - CACHED ====================
+
 app.get("/tasks/:id", authMiddleware, async (req, res, next) => {
     try {
+        const cacheKey = `task_${req.params.id}`;
+
+        const cachedTask = cache.get(cacheKey);
+
+        // Cache HIT
+        if (cachedTask) {
+            cacheHits++;
+
+            console.log(`Cache HIT: ${cacheKey}`);
+
+            return res.status(200).json(cachedTask);
+        }
+
+        // Cache MISS
+        cacheMisses++;
+
+        console.log(`Cache MISS: ${cacheKey}`);
+
         const task = await Task.findById(req.params.id);
 
         if (!task) {
@@ -176,16 +226,25 @@ app.get("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
+        // Store individual task in cache
+        cache.set(cacheKey, task);
+
         res.status(200).json(task);
     } catch (err) {
         next(err);
     }
 });
 
-// POST a new task - Protected
+// ==================== CREATE TASK ====================
+
 app.post("/tasks", authMiddleware, validateTask, async (req, res, next) => {
     try {
         const task = await Task.create(req.body);
+
+        // Invalidate all tasks cache
+        cache.del("all_tasks");
+
+        console.log("Cache invalidated: all_tasks");
 
         res.status(201).json(task);
     } catch (err) {
@@ -193,7 +252,8 @@ app.post("/tasks", authMiddleware, validateTask, async (req, res, next) => {
     }
 });
 
-// PUT update a task - Protected
+// ==================== UPDATE TASK ====================
+
 app.put("/tasks/:id", authMiddleware, validateTask, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndUpdate(
@@ -208,13 +268,23 @@ app.put("/tasks/:id", authMiddleware, validateTask, async (req, res, next) => {
             });
         }
 
+        // Invalidate all tasks cache
+        cache.del("all_tasks");
+
+        // Invalidate individual task cache
+        cache.del(`task_${req.params.id}`);
+
+        console.log("Cache invalidated: all_tasks");
+        console.log(`Cache invalidated: task_${req.params.id}`);
+
         res.status(200).json(task);
     } catch (err) {
         next(err);
     }
 });
 
-// DELETE a task - Protected
+// ==================== DELETE TASK ====================
+
 app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
@@ -225,6 +295,15 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
             });
         }
 
+        // Invalidate all tasks cache
+        cache.del("all_tasks");
+
+        // Invalidate individual task cache
+        cache.del(`task_${req.params.id}`);
+
+        console.log("Cache invalidated: all_tasks");
+        console.log(`Cache invalidated: task_${req.params.id}`);
+
         res.status(200).json({
             message: "Task deleted successfully"
         });
@@ -233,19 +312,31 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
     }
 });
 
-// Test Error Route
+// ==================== CACHE STATISTICS ====================
+
+app.get("/cache/stats", authMiddleware, (req, res) => {
+    res.status(200).json({
+        cacheHits,
+        cacheMisses
+    });
+});
+
+// ==================== TEST ERROR ROUTE ====================
+
 app.get("/error", (req, res, next) => {
     next(new Error("Test error"));
 });
 
-// 404 Handler
+// ==================== 404 HANDLER ====================
+
 app.use((req, res) => {
     res.status(404).json({
         error: "Route not found"
     });
 });
 
-// Global Error Handling Middleware
+// ==================== GLOBAL ERROR HANDLER ====================
+
 app.use((err, req, res, next) => {
     console.error(err);
 
@@ -254,7 +345,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start the server
+// ==================== START SERVER ====================
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
