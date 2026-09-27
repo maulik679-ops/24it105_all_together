@@ -1,7 +1,17 @@
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import Spinner from "./Spinner";
 import ErrorMessage from "./ErrorMessage";
+
+// Lazy-load the chart only when it is needed
+// const TaskChart = lazy(() => import("./TaskChart"));
+const TaskChart = lazy(() =>
+  Promise.all([
+    import("./TaskChart"),
+    new Promise((resolve) => setTimeout(resolve, 300)),
+  ]).then(([module]) => module)
+);
 
 function Projects() {
   const [tasks, setTasks] = useState([]);
@@ -12,6 +22,9 @@ function Projects() {
 
   const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+
+  // State for showing or hiding the chart
+  const [showChart, setShowChart] = useState(false);
 
   const navigate = useNavigate();
 
@@ -24,6 +37,7 @@ function Projects() {
     navigate("/login");
   };
 
+  // FETCH TASKS
   const fetchTasks = () => {
     setLoading(true);
     setError(null);
@@ -60,6 +74,7 @@ function Projects() {
     fetchTasks();
   }, []);
 
+  // TOAST NOTIFICATION
   const showToast = (message, type = "success") => {
     setToast({
       message,
@@ -222,7 +237,6 @@ function Projects() {
 
   return (
     <div className="bento-card tasks-card">
-
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.message}
@@ -231,6 +245,23 @@ function Projects() {
 
       <h2 className="section-title">Tasks</h2>
 
+      {/* LAZY-LOADED TASK CHART */}
+      <button
+        className="btn btn-secondary"
+        onClick={() => setShowChart(!showChart)}
+      >
+        {showChart ? "Hide Task Chart" : "Show Task Chart"}
+      </button>
+
+      {showChart && (
+        <Suspense
+          fallback={<p>Loading chart...</p>}
+        >
+          <TaskChart tasks={tasks} />
+        </Suspense>
+      )}
+
+      {/* ADD TASK FORM */}
       <form onSubmit={addTask} className="task-form">
         <input
           type="text"
@@ -250,6 +281,7 @@ function Projects() {
 
       <br />
 
+      {/* SEARCH TASKS */}
       <input
         type="text"
         className="form-input search-box"
@@ -258,6 +290,7 @@ function Projects() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
+      {/* TASK LIST */}
       <div className="tasks-list">
         {filteredTasks.map((task) => (
           <div
@@ -265,7 +298,6 @@ function Projects() {
             className="task-item-card"
           >
             <div className="task-header">
-
               <h3 className="task-title">
                 {task.title}
               </h3>
@@ -282,11 +314,9 @@ function Projects() {
                   ? "Completed"
                   : "Pending"}
               </span>
-
             </div>
 
             <div className="task-actions">
-
               <button
                 onClick={() => updateTask(task)}
                 className="btn btn-secondary"
@@ -300,7 +330,6 @@ function Projects() {
               >
                 Delete
               </button>
-
             </div>
 
             <hr className="task-divider" />
@@ -308,11 +337,10 @@ function Projects() {
         ))}
       </div>
 
+      {/* DELETE CONFIRMATION */}
       {deleteId && (
         <div className="modal-overlay">
-
           <div className="confirmation-modal">
-
             <h3>Delete Task?</h3>
 
             <p>
@@ -321,7 +349,6 @@ function Projects() {
             </p>
 
             <div className="modal-actions">
-
               <button
                 onClick={() => setDeleteId(null)}
                 className="btn btn-secondary"
@@ -335,14 +362,10 @@ function Projects() {
               >
                 Delete
               </button>
-
             </div>
-
           </div>
-
         </div>
       )}
-
     </div>
   );
 }
