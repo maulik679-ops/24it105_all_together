@@ -7,6 +7,8 @@ const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
 require("dotenv").config();
+require("./listeners");
+const taskEvents = require("./events");
 
 const Task = require("./models/Task");
 const cache = require("./cache");
@@ -24,6 +26,8 @@ app.use(cors());
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("MongoDB connected successfully");
+        console.log("Connected database:", mongoose.connection.name);
+        console.log("Tasks collection:", mongoose.connection.collection("tasks").collectionName);
     })
     .catch((err) => {
         console.error("MongoDB connection failed:", err);
@@ -237,16 +241,26 @@ app.get("/tasks/:id", authMiddleware, async (req, res, next) => {
 
 // ==================== CREATE TASK ====================
 
+
 app.post("/tasks", authMiddleware, validateTask, async (req, res, next) => {
     try {
         const task = await Task.create(req.body);
 
-        // Invalidate all tasks cache
+        // Invalidate cache (Practical 9)
         cache.del("all_tasks");
-
         console.log("Cache invalidated: all_tasks");
 
+        // Log when the API response is sent
+        console.log("[API] Response sent at:", new Date().toISOString());
+
+        // Respond immediately
         res.status(201).json(task);
+
+        // Trigger background notification
+        setImmediate(() => {
+            taskEvents.emit("task-created", task);
+        });
+
     } catch (err) {
         next(err);
     }
@@ -304,8 +318,15 @@ app.delete("/tasks/:id", authMiddleware, async (req, res, next) => {
         console.log("Cache invalidated: all_tasks");
         console.log(`Cache invalidated: task_${req.params.id}`);
 
+        
+        console.log("[API] Task deletion response at:", new Date().toISOString());
+
         res.status(200).json({
             message: "Task deleted successfully"
+        });
+
+        setImmediate(() => {
+            taskEvents.emit("task-deleted", task);
         });
     } catch (err) {
         next(err);
