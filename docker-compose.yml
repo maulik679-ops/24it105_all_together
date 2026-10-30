@@ -1,0 +1,54 @@
+services:
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:6
+    container_name: taskflow-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+  # Node.js + Express Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskflow-backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongodb:27017/taskdb
+      - JWT_SECRET=supersecretjwtkey_itue301_charusat_2026
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+
+  # React + Vite Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow-frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# Internal Bridge Network for inter-container communication
+networks:
+  app-network:
+    driver: bridge
+
+# Named volume for persistent MongoDB storage across restarts
+volumes:
+  mongo-data:
+    driver: local
