@@ -9,6 +9,7 @@ const Task = require('./models/Task');
 const User = require('./models/User');
 const auth = require('./middleware/auth');
 const { validateTaskInput, validateAuthInput } = require('./middleware/validate');
+const { cache, cacheStats } = require('./cache');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -48,6 +49,18 @@ app.use((req, res, next) => {
 // Home Route
 app.get('/', (req, res) => {
     res.send('Task Manager API is running...');
+});
+
+// ==========================================
+// CACHE STATS ENDPOINT (Practical 9)
+// ==========================================
+app.get('/cache/stats', (req, res) => {
+    res.status(200).json({
+        hits: cacheStats.hits,
+        misses: cacheStats.misses,
+        keys: cache.keys(),
+        stats: cache.getStats()
+    });
 });
 
 // ==========================================
@@ -147,25 +160,51 @@ app.get('/me', auth, async (req, res, next) => {
 // TASK ROUTES (Protected with auth middleware)
 // ==========================================
 
-// GET all tasks
+// GET all tasks (Cached with 60s TTL)
 app.get('/tasks', auth, async (req, res, next) => {
     try {
+        const cachedTasks = cache.get('all_tasks');
+        if (cachedTasks) {
+            cacheStats.hits++;
+            res.set('X-Cache', 'HIT');
+            return res.status(200).json(cachedTasks);
+        }
+
+        cacheStats.misses++;
         const tasks = await Task.find().sort({ createdAt: -1 });
+        cache.set('all_tasks', tasks);
+        res.set('X-Cache', 'MISS');
         res.status(200).json(tasks);
     } catch (err) {
         next(err);
     }
 });
 
-// GET task by ID
+// GET task by ID (Cached)
 app.get('/tasks/:id', auth, async (req, res, next) => {
     try {
+        const cacheKey = `task_${req.params.id}`;
+        const cachedTask = cache.get(cacheKey);
+        if (cachedTask) {
+            cacheStats.hits++;
+            res.set('X-Cache', 'HIT');
+            return res.status(200).json(cachedTask);
+        }
+
         const task = await Task.findById(req.params.id);
         if (!task) {
             return res.status(404).json({
                 message: "Task not found"
             });
         }
+
+        cacheStats.misses++;
+        cache.set(cacheKey, task);
+        res.set('X-Cache', 'MISS');
+        // Invalidate cache
+        cache.del('all_tasks');
+        cache.del(`task_${req.params.id}`);
+
         res.status(200).json(task);
     } catch (err) {
         next(err);
@@ -180,6 +219,9 @@ app.post('/tasks', auth, validateTaskInput, async (req, res, next) => {
             user: req.user.id
         };
         const task = await Task.create(taskData);
+
+        // Invalidate all_tasks cache on new write
+        cache.del('all_tasks');
         res.status(201).json(task);
     } catch (err) {
         next(err);
@@ -217,6 +259,10 @@ app.delete('/tasks/:id', auth, async (req, res, next) => {
                 message: "Task not found"
             });
         }
+
+        // Invalidate cache
+        cache.del('all_tasks');
+        cache.del(`task_${req.params.id}`);
 
         res.status(200).json({
             message: "Task deleted successfully"
