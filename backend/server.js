@@ -10,6 +10,8 @@ const User = require('./models/User');
 const auth = require('./middleware/auth');
 const { validateTaskInput, validateAuthInput } = require('./middleware/validate');
 const { cache, cacheStats } = require('./cache');
+const taskEvents = require('./events');
+require('./listeners'); // Register background event listeners (Practical 10)
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -157,7 +159,7 @@ app.get('/me', auth, async (req, res, next) => {
 });
 
 // ==========================================
-// TASK ROUTES (Protected with auth middleware)
+// TASK ROUTES WITH CACHING & EVENTS
 // ==========================================
 
 // GET all tasks (Cached with 60s TTL)
@@ -201,17 +203,13 @@ app.get('/tasks/:id', auth, async (req, res, next) => {
         cacheStats.misses++;
         cache.set(cacheKey, task);
         res.set('X-Cache', 'MISS');
-        // Invalidate cache
-        cache.del('all_tasks');
-        cache.del(`task_${req.params.id}`);
-
         res.status(200).json(task);
     } catch (err) {
         next(err);
     }
 });
 
-// POST a new task
+// POST a new task (Asynchronous Event Processing via EventEmitter - Practical 10)
 app.post('/tasks', auth, validateTaskInput, async (req, res, next) => {
     try {
         const taskData = {
@@ -222,13 +220,19 @@ app.post('/tasks', auth, validateTaskInput, async (req, res, next) => {
 
         // Invalidate all_tasks cache on new write
         cache.del('all_tasks');
+
+        // Immediate API response sent to client (Fast non-blocking response)
+        console.log(`[API Response] POST /tasks 201 sent at ${new Date().toISOString()}`);
         res.status(201).json(task);
+
+        // Emit asynchronous background event after response is dispatched
+        taskEvents.emit('task-created', task);
     } catch (err) {
         next(err);
     }
 });
 
-// PUT update a task
+// PUT update a task (Invalidates 'all_tasks' and single task cache)
 app.put('/tasks/:id', auth, validateTaskInput, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndUpdate(
@@ -243,13 +247,17 @@ app.put('/tasks/:id', auth, validateTaskInput, async (req, res, next) => {
             });
         }
 
+        // Invalidate cache
+        cache.del('all_tasks');
+        cache.del(`task_${req.params.id}`);
+
         res.status(200).json(task);
     } catch (err) {
         next(err);
     }
 });
 
-// DELETE a task
+// DELETE a task (Emits task-deleted event)
 app.delete('/tasks/:id', auth, async (req, res, next) => {
     try {
         const task = await Task.findByIdAndDelete(req.params.id);
@@ -264,9 +272,13 @@ app.delete('/tasks/:id', auth, async (req, res, next) => {
         cache.del('all_tasks');
         cache.del(`task_${req.params.id}`);
 
+        console.log(`[API Response] DELETE /tasks/:id 200 sent at ${new Date().toISOString()}`);
         res.status(200).json({
             message: "Task deleted successfully"
         });
+
+        // Emit background deletion event
+        taskEvents.emit('task-deleted', { id: task._id, title: task.title });
     } catch (err) {
         next(err);
     }
@@ -277,7 +289,7 @@ app.get('/error', (req, res, next) => {
     next(new Error("Test error"));
 });
 
-// 404 Handler
+// 404 Handler for undefined routes
 app.use((req, res) => {
     res.status(404).json({
         error: "Route not found"
@@ -292,6 +304,7 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Start the server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
