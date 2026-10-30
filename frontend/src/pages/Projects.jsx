@@ -3,24 +3,24 @@ import Spinner from "../components/Spinner";
 import ErrorMessage from "../components/ErrorMessage";
 
 function Projects() {
-  const [repos, setRepos] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [search, setSearch] = useState("");
+  const [title, setTitle] = useState("");
 
-  const fetchRepos = () => {
+  const fetchTasks = () => {
     setLoading(true);
     setError(null);
 
-    fetch("https://api.github.com/users/maulik679-ops/repos?sort=updated")
+    fetch("http://localhost:5000/tasks")
       .then((res) => {
         if (!res.ok) {
-          throw new Error("Failed to fetch repositories");
+          throw new Error("Failed to fetch tasks from server");
         }
         return res.json();
       })
       .then((data) => {
-        setRepos(data);
+        setTasks(data);
       })
       .catch((err) => {
         setError(err.message);
@@ -31,45 +31,53 @@ function Projects() {
   };
 
   useEffect(() => {
-    fetchRepos();
+    fetchTasks();
   }, []);
 
-  if (loading) {
-    return <Spinner />;
-  }
+  const handleAddTask = (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
 
-  if (error) {
-    return (
-      <div className="error-container">
-        <ErrorMessage message={error} />
-        <button onClick={fetchRepos} className="btn-retry">Retry</button>
-      </div>
-    );
-  }
-
-  const filteredRepos = repos.filter((repo) =>
-    repo.name.toLowerCase().includes(search.toLowerCase())
-  );
+    fetch("http://localhost:5000/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title })
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to create task");
+        return res.json();
+      })
+      .then((newTask) => {
+        setTasks((prev) => [newTask, ...prev]);
+        setTitle("");
+      })
+      .catch((err) => setError(err.message));
+  };
 
   return (
     <div className="projects-container">
-      <h2>GitHub Repositories</h2>
-      <input
-        type="text"
-        className="search-box"
-        placeholder="Search repository..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <h2>Full-Stack Taskflow Tasks</h2>
+      <form onSubmit={handleAddTask} className="task-form">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="New task title..."
+          className="task-input"
+        />
+        <button type="submit" className="btn-primary">Add Task</button>
+      </form>
 
-      <div className="repo-list">
-        {filteredRepos.map((repo) => (
-          <div key={repo.id} className="repo-card">
-            <h3>{repo.name}</h3>
-            <p>{repo.description || "No description provided."}</p>
-            <a href={repo.html_url} target="_blank" rel="noreferrer">
-              View on GitHub
-            </a>
+      {loading && <Spinner />}
+      {error && <ErrorMessage message={error} />}
+
+      <div className="task-list">
+        {tasks.map((task) => (
+          <div key={task._id || task.id} className="task-card">
+            <h4>{task.title}</h4>
+            <span className={task.completed ? "status-done" : "status-pending"}>
+              {task.completed ? "Done" : "Pending"}
+            </span>
           </div>
         ))}
       </div>
