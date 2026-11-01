@@ -3,10 +3,11 @@ const app = require('../server');
 
 describe('Task Management API - CI/CD Automated Test Suite', () => {
 
-    // Test 1: Verify Root / Healthcheck endpoint
+    // Test 1: Verify Root / Healthcheck endpoint (Deliberately broken test for CI failure demonstration)
     it('GET / should return 200 OK and running status message', async () => {
         const response = await request(app).get('/');
-        expect(response.statusCode).toBe(200);
+        // DELIBERATE FAILURE: Expecting status 500 instead of 200 to test pipeline failure behavior
+        expect(response.statusCode).toBe(500);
         expect(response.text).toContain('Task Manager API is running...');
     });
 
