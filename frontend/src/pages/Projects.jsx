@@ -10,6 +10,9 @@ function Projects() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiDisclaimer, setAiDisclaimer] = useState("");
 
   const fetchTasks = () => {
     setLoading(true);
@@ -49,6 +52,39 @@ function Projects() {
     fetchTasks();
   }, [token]);
 
+  const handleGenerateAiDescription = async () => {
+    if (!title.trim()) {
+      alert("Please enter a task title first so AI can generate a description!");
+      return;
+    }
+
+    setIsGenerating(true);
+    setAiDisclaimer("");
+
+    try {
+      const response = await fetch("http://localhost:5000/api/ai/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title }),
+      });
+
+      const data = await response.json();
+      if (data.description) {
+        setDescription(data.description);
+        setAiDisclaimer(
+          data.fallback
+            ? "⚠️ Fallback suggestion applied (AI service offline or rate-limited)."
+            : "AI-generated suggestion. Please review and edit before saving."
+        );
+      }
+    } catch (err) {
+      setDescription(`Review requirements, milestones, and deliverable items for "${title.trim()}".`);
+      setAiDisclaimer("⚠️ Fallback suggestion applied (network connection issue).");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const addTask = (e) => {
     e.preventDefault();
 
@@ -69,6 +105,7 @@ function Projects() {
       },
       body: JSON.stringify({
         title: title,
+        description: description,
         completed: false,
       }),
     })
@@ -88,6 +125,8 @@ function Projects() {
       .then((newTask) => {
         setTasks([newTask, ...tasks]);
         setTitle("");
+        setDescription("");
+        setAiDisclaimer("");
       })
       .catch((err) => {
         setError(err.message);
@@ -114,6 +153,7 @@ function Projects() {
       },
       body: JSON.stringify({
         title: newTitle,
+        description: task.description,
         completed: task.completed,
       }),
     })
@@ -209,12 +249,16 @@ function Projects() {
             <span className="material-symbols-outlined text-[14px]">shield</span>
             JWT Protected Route
           </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 font-label-sm text-[11px] uppercase tracking-wider text-primary">
+            <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+            AI Enhanced
+          </span>
         </div>
         <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-2 tracking-tight">
           Project Tasks &amp; Deliverables
         </h1>
         <p className="font-body-lg text-body-lg text-on-surface-variant">
-          System orchestration, task state management, and full-stack JWT-authenticated API integration.
+          System orchestration, task state management, and full-stack AI-assisted workflows.
         </p>
       </header>
 
@@ -283,25 +327,71 @@ function Projects() {
               </span>
             )}
           </div>
-          <form onSubmit={addTask} className="flex flex-col sm:flex-row gap-4 items-center w-full">
-            <div className="flex-grow relative w-full glow-input rounded-lg border border-outline-variant/30 bg-surface-container-low transition-all duration-300">
+          
+          <form onSubmit={addTask} className="flex flex-col gap-4 w-full">
+            {/* Task Title Input */}
+            <div className="glow-input rounded-lg border border-outline-variant/30 bg-surface-container-low transition-all duration-300">
               <input
                 className="w-full bg-transparent border-none text-on-surface font-body-md py-3 px-4 focus:ring-0 placeholder:text-outline/50 outline-none"
-                placeholder={isAuthenticated ? "Enter task title..." : "Sign in to define new tasks..."}
+                placeholder={isAuthenticated ? "Enter task title (e.g. Implement OAuth2 Google Login)..." : "Sign in to define new tasks..."}
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
-            <button
-              type="submit"
-              className="w-full sm:w-auto px-6 py-3 bg-primary text-on-primary font-label-sm text-label-sm rounded-full shadow-lg shadow-primary/20 hover:bg-primary-fixed transition-all duration-300 active:scale-95 whitespace-nowrap flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {isAuthenticated ? "add" : "lock"}
-              </span>
-              <span>{isAuthenticated ? "Add Task" : "Sign In to Add"}</span>
-            </button>
+
+            {/* Description Field & AI Generator Trigger */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-wider">
+                  Task Description
+                </label>
+                <button
+                  type="button"
+                  disabled={isGenerating || !isAuthenticated}
+                  onClick={handleGenerateAiDescription}
+                  className="px-3.5 py-1.5 rounded-full border border-primary/40 bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Generate intelligent description based on title"
+                >
+                  <span className={`material-symbols-outlined text-[15px] ${isGenerating ? "animate-spin" : ""}`}>
+                    {isGenerating ? "sync" : "auto_awesome"}
+                  </span>
+                  <span>{isGenerating ? "Generating Description..." : "AI Auto-Generate"}</span>
+                </button>
+              </div>
+
+              <div className="glow-input rounded-lg border border-outline-variant/30 bg-surface-container-low transition-all duration-300">
+                <textarea
+                  rows="2"
+                  className="w-full bg-transparent border-none text-on-surface font-body-md py-2.5 px-4 focus:ring-0 placeholder:text-outline/50 outline-none resize-none text-sm"
+                  placeholder={isAuthenticated ? "Write description or click 'AI Auto-Generate' to generate automatically..." : "Sign in to define descriptions..."}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={!isAuthenticated}
+                />
+              </div>
+
+              {/* AI Suggestion Notice & Disclaimer */}
+              {aiDisclaimer && (
+                <div className="text-[12px] text-primary flex items-center gap-1.5 px-1 py-0.5">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  <span>{aiDisclaimer}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                className="w-full sm:w-auto px-6 py-2.5 bg-primary text-on-primary font-label-sm text-label-sm rounded-full shadow-lg shadow-primary/20 hover:bg-primary-fixed transition-all duration-300 active:scale-95 whitespace-nowrap flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {isAuthenticated ? "add" : "lock"}
+                </span>
+                <span>{isAuthenticated ? "Add Task" : "Sign In to Add"}</span>
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -347,23 +437,42 @@ function Projects() {
           filteredTasks.map((task) => (
             <div
               key={task._id}
-              className="bento-card rounded-lg p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group"
+              className="bento-card rounded-lg p-6 flex flex-col justify-between items-start gap-4 group"
             >
-              <div className="flex-grow">
-                <div className="flex items-center gap-3 mb-2">
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full border font-label-sm text-[11px] uppercase tracking-wider ${
-                      task.completed
-                        ? "border-secondary/30 bg-secondary/10 text-secondary"
-                        : "border-tertiary/30 bg-tertiary/10 text-tertiary"
-                    }`}
-                  >
-                    {task.completed ? "Done" : "Pending"}
-                  </span>
-                  <span className="font-code-block text-code-block text-outline-variant text-[12px]">
-                    ID-{task._id ? task._id.slice(-4) : "TASK"}
-                  </span>
+              <div className="w-full">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full border font-label-sm text-[11px] uppercase tracking-wider ${
+                        task.completed
+                          ? "border-secondary/30 bg-secondary/10 text-secondary"
+                          : "border-tertiary/30 bg-tertiary/10 text-tertiary"
+                      }`}
+                    >
+                      {task.completed ? "Done" : "Pending"}
+                    </span>
+                    <span className="font-code-block text-code-block text-outline-variant text-[12px]">
+                      ID-{task._id ? task._id.slice(-4) : "TASK"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 opacity-100 transition-opacity duration-300">
+                    <button
+                      onClick={() => updateTask(task)}
+                      className="p-1.5 rounded-full border border-outline-variant/20 text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all cursor-pointer"
+                      title="Update"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => deleteTask(task._id)}
+                      className="p-1.5 rounded-full border border-outline-variant/20 text-on-surface-variant hover:bg-error/10 hover:text-error hover:border-error/30 transition-all cursor-pointer"
+                      title="Delete"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
                 </div>
+
                 <h4
                   className={`font-body-md text-body-md font-medium ${
                     task.completed ? "line-through text-on-surface-variant/50" : "text-on-surface"
@@ -371,22 +480,12 @@ function Projects() {
                 >
                   {task.title}
                 </h4>
-              </div>
-              <div className="flex items-center gap-2 opacity-100 transition-opacity duration-300">
-                <button
-                  onClick={() => updateTask(task)}
-                  className="p-2 rounded-full border border-outline-variant/20 text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-all cursor-pointer"
-                  title="Update"
-                >
-                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                </button>
-                <button
-                  onClick={() => deleteTask(task._id)}
-                  className="p-2 rounded-full border border-outline-variant/20 text-on-surface-variant hover:bg-error/10 hover:text-error hover:border-error/30 transition-all cursor-pointer"
-                  title="Delete"
-                >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                </button>
+
+                {task.description && (
+                  <p className="font-body-sm text-xs text-on-surface-variant mt-2 leading-relaxed bg-surface-container-lowest/50 p-2.5 rounded-lg border border-outline-variant/10">
+                    {task.description}
+                  </p>
+                )}
               </div>
             </div>
           ))

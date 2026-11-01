@@ -12,6 +12,8 @@ const { validateTaskInput, validateAuthInput } = require('./middleware/validate'
 const { cache, cacheStats } = require('./cache');
 const taskEvents = require('./events');
 require('./listeners'); // Register background event listeners (Practical 10)
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -283,6 +285,51 @@ app.delete('/tasks/:id', auth, async (req, res, next) => {
         taskEvents.emit('task-deleted', { id: task._id, title: task.title });
     } catch (err) {
         next(err);
+    }
+});
+
+// ==========================================
+// AI TASK DESCRIPTION GENERATOR (Practical 13)
+// ==========================================
+app.post('/api/ai/generate-description', async (req, res) => {
+    const { title } = req.body;
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ error: 'Task title is required to generate description' });
+    }
+
+    try {
+        if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('your_actual')) {
+            throw new Error('GEMINI_API_KEY not configured or using placeholder');
+        }
+
+        const model = genAI.getGenerativeModel({ model: 'gemini-flash-lite-latest' });
+        const prompt = `Write a concise, professional 1-2 sentence actionable description for a task titled: "${title.trim()}". Do not include quotes, markdown formatting, or conversational filler.`;
+
+        // 8-second timeout guard for fast response & graceful degradation
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('AI request timed out')), 8000)
+        );
+
+        const result = await Promise.race([
+            model.generateContent(prompt),
+            timeoutPromise
+        ]);
+        const text = result.response.text().trim();
+
+        return res.status(200).json({
+            description: text,
+            fallback: false
+        });
+    } catch (err) {
+        console.warn('[AI Service Warning] Falling back to default generation:', err.message);
+
+        // GRACEFUL DEGRADATION: Return default fallback suggestion without crashing
+        return res.status(200).json({
+            description: `Review requirements, organize milestones, and execute deliverables for "${title.trim()}".`,
+            fallback: true,
+            notice: 'Generated via fallback handler (AI service unavailable or key expired).'
+        });
     }
 });
 
