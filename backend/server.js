@@ -18,14 +18,16 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("MongoDB connected successfully");
-    })
-    .catch((err) => {
-        console.error("MongoDB connection failed:", err);
-    });
+// Connect to MongoDB (connect only when MONGO_URI is set and not running in unit test mode)
+if (process.env.NODE_ENV !== 'test' && process.env.MONGO_URI) {
+    mongoose.connect(process.env.MONGO_URI)
+        .then(() => {
+            console.log("MongoDB connected successfully");
+        })
+        .catch((err) => {
+            console.error("MongoDB connection failed:", err);
+        });
+}
 
 // Parse JSON request body
 app.use(express.json());
@@ -304,7 +306,11 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+// Start the server only if not in unit test mode
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
